@@ -11,7 +11,7 @@ namespace Q9CS
 
     class Q9Core
     {
-        private SQLiteConnection con;
+        private readonly SQLiteConnection con;
 
         public Q9Core()
         {
@@ -20,14 +20,14 @@ namespace Q9CS
             con.Open();
         }
 
-        private string[] sql2strs(string stm,string splitStr="")
+        private string[] Sql2strs(string stm, string splitStr = "")
         {
             SQLiteCommand cmd = new SQLiteCommand(stm, con);
             object result = cmd.ExecuteScalar();
             if (result != null)
             {
                 string str = result.ToString();
-                StringInfo stru8 = new System.Globalization.StringInfo(str);
+                StringInfo stru8 = new StringInfo(str);
 
                 //char[] charArr = str.ToCharArray();
 
@@ -63,15 +63,15 @@ namespace Q9CS
 
         }
 
-        public string[] keyInput(int key)
+        public string[] KeyInput(int key)
         {
             //string stm = $"SELECT characters FROM `mapped_table` WHERE id='{key}'";
-            return sql2strs($"SELECT characters FROM `mapped_table` WHERE id='{key}'");
+            return Sql2strs($"SELECT characters FROM `mapped_table` WHERE id='{key}'");
         }
 
-        public string[] getRelate(string word)
+        public string[] GetRelate(string word)
         {
-            return sql2strs($"SELECT candidates FROM `related_candidates_table` WHERE character='{word}'", " ");
+            return Sql2strs($"SELECT candidates FROM `related_candidates_table` WHERE character='{word}'", " ");
         }
 
         /*
@@ -82,7 +82,7 @@ namespace Q9CS
         }
         */
 
-        public string[] getHomo(string word)
+        public string[] GetHomo(string word)
         {
 
             var words = new List<string>();
@@ -120,7 +120,7 @@ namespace Q9CS
         }
 
 
-        public string tcsc(string input)
+        public string Tc2Sc(string input)
         {
             StringBuilder output = new StringBuilder();
             foreach (char c in input)

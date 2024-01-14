@@ -11,8 +11,7 @@ namespace Q9CS
         static void Main()
         {
             const string appName = "TQ9";
-            bool createdNew;
-            var mutex = new Mutex(true, appName, out createdNew);
+            var mutex = new Mutex(true, appName, out bool createdNew);
             if (!createdNew)
             {
                 //app is already running! Exiting the application
@@ -24,10 +23,12 @@ namespace Q9CS
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            Form f = new Q9Form();
-            f.TopMost = true;
+            Form f = new Q9Form
+            {
+                TopMost = true
+            };
 
-            InterceptKeys.init(ref f,((Q9Form)f).handleKey);
+            InterceptKeys.init(ref f,((Q9Form)f).HandleKey);
             //Application.Run(f);
 
 

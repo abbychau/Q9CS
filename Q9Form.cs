@@ -14,7 +14,7 @@ using System.Drawing.Text;
 namespace Q9CS
 {
 
-    public enum q9command
+    public enum Q9command
     {
         cancel,
         prev,
@@ -28,7 +28,7 @@ namespace Q9CS
 
     public class IniFile
     {
-        string filePath;
+        readonly string filePath;
 
         [DllImport("kernel32", CharSet = CharSet.Unicode)]
         static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
@@ -39,16 +39,16 @@ namespace Q9CS
         public IniFile(string filePath)
         {
             //var dir = Path.GetDirectoryName(filePath);
-            var dir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            var dir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             if (!Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir ?? throw new InvalidOperationException("Invalid file path"));
             }
 
-            this.filePath = System.IO.Path.Combine(dir ,filePath);
+            this.filePath = Path.Combine(dir, filePath);
         }
 
-        public bool makeExcite()
+        public bool MakeExcite()
         {
 
             // Check if the file exists, and if not, create an empty file
@@ -62,15 +62,15 @@ namespace Q9CS
 
         public void Write(string section, string key, int value)
         {
-            long result = WritePrivateProfileString(section, key, value.ToString(), this.filePath);
-            Debug.WriteLine($"{result},{this.filePath},{key}");
+            long result = WritePrivateProfileString(section, key, value.ToString(), filePath);
+            Debug.WriteLine($"{result},{filePath},{key}");
         }
 
         public int ReadInt(string section, string key, int defaultValue)
         {
             StringBuilder SB = new StringBuilder(255);
-            int i = GetPrivateProfileString(section, key, defaultValue.ToString(), SB, 255, this.filePath);
-            return int.TryParse(SB.ToString(), out i) ? i : defaultValue;
+            _ = GetPrivateProfileString(section, key, defaultValue.ToString(), SB, 255, filePath);
+            return int.TryParse(SB.ToString(), out int i) ? i : defaultValue;
         }
     }
 
@@ -82,24 +82,24 @@ namespace Q9CS
         private static readonly string StartupValue = "Q9CS";
 
 
-        private Q9Core core;
-        private List<Button> buttons = new List<Button> { };
+        private readonly Q9Core core;
+        private readonly List<Button> buttons = new List<Button> { };
 
-        private Image[] images = new Image[120];
+        private readonly Image[] images = new Image[120];
 
         private bool active = true;
         private bool sc_output = false;
         private bool use_numpad = true;
 
-        private IniFile ini = new IniFile("tq9_settings.ini");
-        private Dictionary<string, int> Keys = new Dictionary<string, int>();
-        private Dictionary<string, int> altKeys = new Dictionary<string, int>();
+        private readonly IniFile ini = new IniFile("tq9_settings.ini");
+        private readonly Dictionary<string, int> Keys = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> altKeys = new Dictionary<string, int>();
 
         public void Q9Form_FormClosing(object sender, FormClosingEventArgs e)
         {
             // Save size and position
-            ini.Write("Window", "Left", this.Left);
-            ini.Write("Window", "Top", this.Top);
+            ini.Write("Window", "Left", Left);
+            ini.Write("Window", "Top", Top);
             ini.Write("Window", "BoxSize", currBoxSize);
         }
 
@@ -108,16 +108,39 @@ namespace Q9CS
         public Q9Form()
         {
             InitializeComponent();
-            this.StartPosition = FormStartPosition.Manual;
-            this.ControlBox = false;
+            StartPosition = FormStartPosition.Manual;
+            ControlBox = false;
 
+            Image[] bigImages = new Image[11];
+            // load 0.bmp ~ 9.bmp
+            for (int i = 0; i <= 10; i++)
+            {
+                bigImages[i] = Image.FromFile($"files/img/{i}.bmp");
+            }
+            int smallImageSize = 51;
             //preload image
             for (int i = 0; i <= 10; i++)
             {
+                //split bigImages[i] to 9 images (3x3), big image size is 154x154
                 for (int j = 1; j <= 9; j++)
                 {
-                    images[i * 10 + j] = Image.FromFile($"files/img/{i}_{j}.png");
+                    int x = (j - 1) % 3;
+                    int y = (j - 1) / 3;
+                    // flip j (123<>789) and set to _j
+                    int _j = (j - 1) % 3 + (2 - (j - 1) / 3) * 3 + 1;
+                    int index = i * 10 + _j;
+                    images[index] = new Bitmap(smallImageSize, smallImageSize);
+                    using (Graphics g = Graphics.FromImage(images[index]))
+                    {
+                        g.DrawImage(
+                            bigImages[i], 
+                            new Rectangle(0, 0, smallImageSize, smallImageSize), 
+                            new Rectangle(x * 51, y * 51, 51, 51), 
+                            GraphicsUnit.Pixel
+                        );
+                    }
                 }
+
             }
             for (int j = 1; j <= 9; j++)
             {
@@ -153,26 +176,27 @@ namespace Q9CS
             //init buttons
             for (int i = 0; i < 11; i++)
             {
-                Button b = new Button();
+                Button b = new Button
+                {
+                    //Arial
+                    //Microsoft Sans Serif
+                    //Debug.WriteLine(b.Font.FontFamily);
+                    Font = new Font(new FontFamily(fontName), 10),
 
-                //Arial
-                //Microsoft Sans Serif
-                //Debug.WriteLine(b.Font.FontFamily);
-                b.Font = new Font(new FontFamily(fontName), 10);
+                    Text = i.ToString()
+                };
 
-                b.Text = i.ToString();
-
-                this.Controls.Add(b);
+                Controls.Add(b);
                 buttons.Add(b);
                 b.BackgroundImageLayout = ImageLayout.Zoom;
                 int j = i;
                 if (i < 10)
                 {
-                    b.Click += new System.EventHandler((object Sender, EventArgs e) => pressKey(j));
+                    b.Click += new EventHandler((object Sender, EventArgs e) => PressKey(j));
                 }
                 else
                 {
-                    b.Click += new System.EventHandler((object Sender, EventArgs e) => commandInput(q9command.cancel));
+                    b.Click += new EventHandler((object Sender, EventArgs e) => CommandInput(Q9command.cancel));
                 }
             }
 
@@ -189,44 +213,44 @@ namespace Q9CS
 
             var keys = "num1,num2,num3,num4,num5,num6,num7,num8,num9,num0,cancel".Split(',');
             var extraKeys = "relate,prev,shortcut,homo,openclose".Split(',');
-            if (!ini.makeExcite())
+            if (!ini.MakeExcite())
             {
                 currBoxSize = 60;
-                this.Left = screenSize.Width - currBoxSize * 3 + 20;
-                this.Top = 100;
+                Left = screenSize.Width - currBoxSize * 3 + 20;
+                Top = 100;
 
-                ini.Write("Window", "Left", this.Left);
-                ini.Write("Window", "Top", this.Top);
+                ini.Write("Window", "Left", Left);
+                ini.Write("Window", "Top", Top);
                 ini.Write("Window", "BoxSize", currBoxSize);
 
                 ini.Write("system", "sc_output", 0);
                 ini.Write("system", "use_numpad", 1);
 
-                ini.Write("AltKey", "num1", (int)'X');
-                ini.Write("AltKey", "num2", (int)'C');
-                ini.Write("AltKey", "num3", (int)'V');
-                ini.Write("AltKey", "num4", (int)'S');
-                ini.Write("AltKey", "num5", (int)'D');
-                ini.Write("AltKey", "num6", (int)'F');
-                ini.Write("AltKey", "num7", (int)'W');
-                ini.Write("AltKey", "num8", (int)'E');
-                ini.Write("AltKey", "num9", (int)'R');
+                ini.Write("AltKey", "num1", 'X');
+                ini.Write("AltKey", "num2", 'C');
+                ini.Write("AltKey", "num3", 'V');
+                ini.Write("AltKey", "num4", 'S');
+                ini.Write("AltKey", "num5", 'D');
+                ini.Write("AltKey", "num6", 'F');
+                ini.Write("AltKey", "num7", 'W');
+                ini.Write("AltKey", "num8", 'E');
+                ini.Write("AltKey", "num9", 'R');
 
-                ini.Write("AltKey", "num0", (int)'Z');
-                ini.Write("AltKey", "cancel", (int)'B');
+                ini.Write("AltKey", "num0", 'Z');
+                ini.Write("AltKey", "cancel", 'B');
 
-                ini.Write("AltKey", "relate", (int)'G');
-                ini.Write("AltKey", "prev", (int)'A');
-                ini.Write("AltKey", "shortcut", (int)'A');
-                ini.Write("AltKey", "homo", (int)'T');
-                ini.Write("AltKey", "openclose", (int)'Q');
+                ini.Write("AltKey", "relate", 'G');
+                ini.Write("AltKey", "prev", 'A');
+                ini.Write("AltKey", "shortcut", 'A');
+                ini.Write("AltKey", "homo", 'T');
+                ini.Write("AltKey", "openclose", 'Q');
 
                 //
-                ini.Write("Key", "relate", 107);
-                ini.Write("Key", "prev", 109);
-                ini.Write("Key", "shortcut", 109);
-                ini.Write("Key", "homo", 106);
-                ini.Write("Key", "openclose", 111);
+                ini.Write("Key", "relate", 107); //107 is numpad +
+                ini.Write("Key", "prev", 109); // -
+                ini.Write("Key", "shortcut", 109); //-
+                ini.Write("Key", "homo", 106); // *
+                ini.Write("Key", "openclose", 111); // /
 
                 //
 
@@ -236,7 +260,7 @@ namespace Q9CS
             }
             else
             {
-                currBoxSize = ini.ReadInt("Window", "BoxSize", this.Width);
+                currBoxSize = ini.ReadInt("Window", "BoxSize", Width);
                 sc_output = Convert.ToBoolean(ini.ReadInt("system", "sc_output", 0));
                 use_numpad = Convert.ToBoolean(ini.ReadInt("system", "use_numpad", 1));
 
@@ -260,34 +284,34 @@ namespace Q9CS
             Keys["position"] = ini.ReadInt("Key", "position", 120);
             Keys["size"] = ini.ReadInt("Key", "size", 119);
             
-            //this.MinimumSize= new Size(120, 160);
-            this.FormBorderStyle = FormBorderStyle.Sizable;
-            //this.AutoSizeMode = 0;
-            this.Resize += Form1_Resize;
-            //this.ClientSize = new Size(currBoxSize*3, currBoxSize * 4);
-            setNewWidth(currBoxSize * 3);
+            //MinimumSize= new Size(120, 160);
+            FormBorderStyle = FormBorderStyle.Sizable;
+            //AutoSizeMode = 0;
+            Resize += Form1_Resize;
+            //ClientSize = new Size(currBoxSize*3, currBoxSize * 4);
+            SetNewWidth(currBoxSize * 3);
 
-            this.Left = Math.Min(screenSize.Width - this.Width, ini.ReadInt("Window", "Left", this.Left));
-            this.Top = Math.Min(screenSize.Height - this.Height, ini.ReadInt("Window", "Top", this.Top));
+            Left = Math.Min(screenSize.Width - Width, ini.ReadInt("Window", "Left", Left));
+            Top = Math.Min(screenSize.Height - Height, ini.ReadInt("Window", "Top", Top));
 
-            Debug.WriteLine($"{this.Left},{screenSize.Width},{screenSize.Left},{screenSize.X}");
+            Debug.WriteLine($"{Left},{screenSize.Width},{screenSize.Left},{screenSize.X}");
 
 
-            this.FormClosing += Q9Form_FormClosing;
+            FormClosing += Q9Form_FormClosing;
 
-            cancel();
+            Cancel();
 
             //tray---------------
 
             var components1 = new System.ComponentModel.Container();
-            var contextMenu1 = new System.Windows.Forms.ContextMenu();
+            var contextMenu1 = new ContextMenu();
 
 
 
             //how2use
-            MenuItem malert= new System.Windows.Forms.MenuItem();
+            MenuItem malert= new MenuItem();
             contextMenu1.MenuItems.AddRange(
-                        new System.Windows.Forms.MenuItem[] { malert });
+                        new MenuItem[] { malert });
             malert.Text = "使用方法";
             malert.Click += new System.EventHandler((object Sender, EventArgs e) => MessageBox.Show(@"
 《九万輸入法》使用方法:
@@ -325,16 +349,18 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
 
 
             //sc
-            var menuItemSC = new System.Windows.Forms.MenuItem();
-            menuItemSC.Index = 0;
-            menuItemSC.Text = "輸出簡體";
+            var menuItemSC = new MenuItem
+            {
+                Index = 0,
+                Text = "輸出簡體"
+            };
             menuItemSC.Click += new System.EventHandler((object Sender, EventArgs e) => {
                 sc_output = !sc_output;
-                ((System.Windows.Forms.MenuItem)Sender).Checked = sc_output;
+                ((MenuItem)Sender).Checked = sc_output;
                 ini.Write("system", "sc_output", sc_output ? 1 : 0);
             });
             menuItemSC.Checked = sc_output;
-            contextMenu1.MenuItems.AddRange(new System.Windows.Forms.MenuItem[] { menuItemSC });
+            contextMenu1.MenuItems.AddRange(new MenuItem[] { menuItemSC });
 
 
             //startup
@@ -355,42 +381,49 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             {
                 startupItem.Checked = true;
             }
-            //contextMenu1.MenuItems.AddRange(new System.Windows.Forms.MenuItem[] { startupItem });
+            //contextMenu1.MenuItems.AddRange(new MenuItem[] { startupItem });
 
 
 
 
             //alt key
-            MenuItem menuAltkey = new MenuItem("不使用num pad", new EventHandler((sender, e) => {
+            MenuItem menuAltkey = new MenuItem("不使用num pad", new EventHandler((sender, e) =>
+            {
                 use_numpad = !use_numpad;
                 ((MenuItem)sender).Checked = !use_numpad;
-                ini.Write("system", "use_numpad", use_numpad?1:0);
-            }));
-            menuAltkey.Checked = !use_numpad;
-            contextMenu1.MenuItems.AddRange(new System.Windows.Forms.MenuItem[] { menuAltkey });
+                ini.Write("system", "use_numpad", use_numpad ? 1 : 0);
+            }))
+            {
+                Checked = !use_numpad
+            };
+            contextMenu1.MenuItems.AddRange(new MenuItem[] { menuAltkey });
 
 
 
             // exit
-            var menuItem1 = new System.Windows.Forms.MenuItem();
-            contextMenu1.MenuItems.AddRange(new System.Windows.Forms.MenuItem[] { menuItem1 });
-            //this.menuItem1.Index = 1;
+            var menuItem1 = new MenuItem();
+            contextMenu1.MenuItems.AddRange(new MenuItem[] { menuItem1 });
+            //menuItem1.Index = 1;
             menuItem1.Text = "離開";
-            menuItem1.Click += new System.EventHandler((object Sender, EventArgs e) => this.Close());
+            menuItem1.Click += new EventHandler((object Sender, EventArgs e) => Close());
 
 
 
             // Create the NotifyIcon.
-            var notifyIcon1 = new System.Windows.Forms.NotifyIcon(components1);
-            notifyIcon1.Icon = new Icon("i.ico");
-            notifyIcon1.ContextMenu = contextMenu1;
-            notifyIcon1.Text = "TQ9";
-            notifyIcon1.Visible = true;
+            var notifyIcon1 = new NotifyIcon(components1)
+            {
+                Icon = new Icon("i.ico"),
+                ContextMenu = contextMenu1,
+                Text = "TQ9",
+                Visible = true
+            };
         }
         private Image SetOpacity(Image image, float opacity)
         {
-            var colorMatrix = new ColorMatrix();
-            colorMatrix.Matrix33 = opacity;
+            var colorMatrix = new ColorMatrix
+            {
+                Matrix33 = opacity
+            };
             var imageAttributes = new ImageAttributes();
             imageAttributes.SetColorMatrix(
                 colorMatrix,
@@ -418,7 +451,7 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             return Math.Max(Math.Min(val, max), min);
         }
 
-        private int[] lastSize = new int[] { 0, 0 };
+        private readonly int[] lastSize = new int[] { 0, 0 };
         private void Form1_Resize(object sender, System.EventArgs e)
         {
             Control control = (Control)sender;
@@ -430,15 +463,15 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 newSize[0] = Clamp(control.ClientSize.Width, 90, 450);
             }
 
-            Debug.Write(this.Width);
+            Debug.Write(Width);
             Debug.Write("_");
             Debug.WriteLine(control.ClientSize.Width);
 
             //Debug.WriteLine("{0}->{1}->{2}", control.Size.Width, control.ClientSize.Width,control.PreferredSize.Width);
             //Debug.WriteLine("{0}->{1}", lastSize[0], newSize[0]);
-            setNewWidth(newSize[0]);
+            SetNewWidth(newSize[0]);
         }
-        private void setNewWidth(int _width)
+        private void SetNewWidth(int _width)
         {
             Control control = (Control)this;
             control.ClientSize = new Size(_width, (int)Math.Round(_width* 1.333));
@@ -467,21 +500,21 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             }
             buttons[0].Top = buttons[10].Top = 3 * boxSize;
             buttons[0].Width = buttons[10].Left = 2 * boxSize;
-            renewFontsize();
+            RenewFontsize();
         }
 
-        public void sendOpenClose(string openclose)
+        public void SendOpenClose(string openclose)
         {
             // $"「」"
             SendKeys.Send(openclose);
             SendKeys.SendWait("{Left}");
         }
-        
-        private void sendText(string text)
+
+        private void SendText(string text)
         {
             if (sc_output)
             {
-                SendKeys.Send(core.tcsc(text));
+                SendKeys.Send(core.Tc2Sc(text));
             }
             else
             {
@@ -489,7 +522,7 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             }
         }
 
-        public bool handleKey(int keyCode)
+        public bool HandleKey(int keyCode)
         {
             //scroll lock
             if (keyCode == Keys["switch"])
@@ -497,16 +530,16 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 active = !active;
                 if (!active)
                 {
-                    this.Hide();
+                    Hide();
                 }
                 else
                 {
-                    this.Show();
-                    this.TopMost = true;
+                    Show();
+                    TopMost = true;
 
                     Rectangle screenSize = Screen.PrimaryScreen.Bounds;
-                    this.Left = Clamp(this.Left, 0, screenSize.Width - this.Width);
-                    this.Top = Clamp(this.Top, 0, screenSize.Height - this.Height);
+                    Left = Clamp(Left, 0, screenSize.Width - Width);
+                    Top = Clamp(Top, 0, screenSize.Height - Height);
                 }
                 return false;
             }
@@ -520,13 +553,13 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             if (keyCode == Keys["position"])
             {
 
-                this.Show();
-                this.TopMost = true;
+                Show();
+                TopMost = true;
                 Rectangle screenSize = Screen.PrimaryScreen.Bounds;
 
-                this.Left = screenSize.Width - this.Width - 30;
+                Left = screenSize.Width - Width - 30;
 
-                this.Top = this.Top > (screenSize.Height - this.Height) / 2 ? 30 : screenSize.Height - this.Height - 65;
+                Top = Top > (screenSize.Height - Height) / 2 ? 30 : screenSize.Height - Height - 65;
                 return false;
             }
 
@@ -547,7 +580,7 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 {
                     newSize = 70;
                 }
-                setNewWidth(newSize * 3);
+                SetNewWidth(newSize * 3);
                 return false;
             }
 
@@ -557,34 +590,34 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 {
                     if (keyCode == altKeys[$"num{i}"])
                     {
-                        pressKey(i);
+                        PressKey(i);
                         return true;
                     }
                 }
 
                 if (keyCode == altKeys["cancel"])
                 {
-                    commandInput(q9command.cancel);
+                    CommandInput(Q9command.cancel);
                 }
                 else if (keyCode == altKeys["relate"])
                 {
-                    commandInput(q9command.relate);
+                    CommandInput(Q9command.relate);
                 }
                 else if (keyCode == altKeys["homo"])
                 {
-                    commandInput(q9command.homo);
+                    CommandInput(Q9command.homo);
                 }
                 else if (keyCode == altKeys["openclose"])
                 {
-                    commandInput(q9command.openclose);
+                    CommandInput(Q9command.openclose);
                 }
                 else if (keyCode == altKeys["shortcut"] && !selectMode)
                 {
-                    commandInput(q9command.shortcut);
+                    CommandInput(Q9command.shortcut);
                 }
                 else if (keyCode == altKeys["prev"] && selectMode)
                 {
-                    commandInput(q9command.prev);
+                    CommandInput(Q9command.prev);
                 }
                 else if(keyCode >= 65 && keyCode <=90)
                 {
@@ -603,34 +636,34 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 if (keyCode >= 96 && keyCode <= 105)
                 {
                     int inputInt = keyCode - 96;//0~9
-                    pressKey(inputInt);
+                    PressKey(inputInt);
                     return true;
                 }
                 else
                 {
                     if (keyCode == 110)
                     {
-                        commandInput(q9command.cancel);
+                        CommandInput(Q9command.cancel);
                     }
                     else if (keyCode == Keys["relate"])
                     {
-                        commandInput(q9command.relate);
+                        CommandInput(Q9command.relate);
                     }
                     else if (keyCode == Keys["homo"])
                     {
-                        commandInput(q9command.homo);
+                        CommandInput(Q9command.homo);
                     }
                     else if (keyCode == Keys["openclose"])
                     {
-                        commandInput(q9command.openclose);
+                        CommandInput(Q9command.openclose);
                     }
                     else if (keyCode == Keys["shortcut"] && !selectMode)
                     {
-                        commandInput(q9command.shortcut);
+                        CommandInput(Q9command.shortcut);
                     }
                     else if (keyCode == Keys["prev"] && selectMode)
                     {
-                        commandInput(q9command.prev);
+                        CommandInput(Q9command.prev);
                     }
                     else
                     {
@@ -644,7 +677,7 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
 
         //==================================================================================================
 
-        public void setButtonImg(int type)//0 1~9 10
+        public void SetButtonImg(int type)//0 1~9 10
         {
             for (int i = 1; i <= 9; i++)
             {
@@ -658,21 +691,21 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
 
             if (type == 0)
             {
-                setText(0, "標點");
+                SetText(0, "標點");
             }
             else if (type <= 9)
             {
-                setText(0, "姓氏");
+                SetText(0, "姓氏");
             }
             else if (type == 10)
             {
-                setText(0, "選字");
+                SetText(0, "選字");
             }
 
-            setText(10, "取消");
+            SetText(10, "取消");
         }
 
-        public void setZeroWords(string[] words)//
+        public void SetZeroWords(string[] words)//
         {
             for (int i = 1; i <= 9; i++)
             {
@@ -684,13 +717,13 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 }
                 else
                 {
-                    setText(i, words[i-1], true);
+                    SetText(i, words[i-1], true);
                 }
             }
-            setText(0, "標點");//
+            SetText(0, "標點");//
         }
 
-        public void setButtonsText(string[] words)
+        public void SetButtonsText(string[] words)
         {
             for (int i = 1; i <= 9; i++)
             {
@@ -703,19 +736,19 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                 }
                 else
                 {
-                    setText(i, words[i]);
+                    SetText(i, words[i]);
                 }
             }
             //setText(0, buttons[0].Text);
-            setText(10, "取消");
+            SetText(10, "取消");
         }
 
-        private void setText(int i, string s, bool relate = false)
+        private void SetText(int i, string s, bool relate = false)
         {
             buttons[i].BackColor = Color.White;
             buttons[i].Text = s;
 
-            int fontsize = 0;
+            int fontsize;
             if (!relate)
             {
                 float scale = i==10?0.5f:0.46f;
@@ -740,13 +773,13 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             buttons[i].Font = new Font(buttons[i].Font.FontFamily, fontsize);
         }
 
-        private void renewFontsize()
+        private void RenewFontsize()
         {
             for (int i = 0; i <= 10; i++)
             {
                 if (buttons[i].Text != "")
                 {
-                    setText(i, buttons[i].Text, buttons[i].TextAlign == ContentAlignment.TopLeft);
+                    SetText(i, buttons[i].Text, buttons[i].TextAlign == ContentAlignment.TopLeft);
                 }
             }
         }
@@ -764,43 +797,43 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
         private string lastWord = "";
 
 
-        private void pressKey(int inputInt)//0~9
+        private void PressKey(int inputInt)//0~9
         {
             string inputStr = inputInt.ToString();
 
-            if (this.selectMode)
+            if (selectMode)
             {
                 if (inputInt == 0)
                 {
-                    commandInput(q9command.next);
+                    CommandInput(Q9command.next);
                 }
                 else
                 {
-                    selectWord(inputInt);
+                    SelectWord(inputInt);
                 }
             }
             else
             {
                 currCode += inputStr;
-                setStatusPrefix(currCode);
-                updateStatus();
+                SetStatusPrefix(currCode);
+                UpdateStatus();
                 if (inputInt == 0)
                 {
-                    processResult(core.keyInput(Convert.ToInt32(currCode)));
+                    ProcessResult(core.KeyInput(Convert.ToInt32(currCode)));
                 }
                 else
                 {
                     if (currCode.Length == 3)
                     {
-                        processResult(core.keyInput(Convert.ToInt32(currCode)));
+                        ProcessResult(core.KeyInput(Convert.ToInt32(currCode)));
                     }
                     else if (currCode.Length == 1)
                     {
-                        setButtonImg(inputInt);
+                        SetButtonImg(inputInt);
                     }
                     else
                     {
-                        setButtonImg(10);
+                        SetButtonImg(10);
                     }
                 }
             }
@@ -808,61 +841,61 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
         }
 
 
-        private void commandInput(q9command command)
+        private void CommandInput(Q9command command)
         {
-            if (command == q9command.cancel)
+            if (command == Q9command.cancel)
             {
-                cancel();
+                Cancel();
             }
-            else if (command == q9command.openclose)
+            else if (command == Q9command.openclose)
             {
                 homo = false;
                 openclose = true;
 
-                string opencloseStr = String.Join("",core.keyInput(1));
+                string opencloseStr = String.Join("",core.KeyInput(1));
                 string[] opencloseArr = new string[(int)(opencloseStr.Length / 2.0)];
                 for (int i = 0; i < opencloseStr.Length; i += 2)
                 {
                     opencloseArr[i/2]=opencloseStr.Substring(i, 2);
                 }
-                setStatusPrefix("「」");
-                startSelectWord(opencloseArr);
+                SetStatusPrefix("「」");
+                StartSelectWord(opencloseArr);
             }
-            else if (command == q9command.homo)
+            else if (command == Q9command.homo)
             {
                 homo = !homo;
-                renewStatus();
+                RenewStatus();
             }
-            else if (command == q9command.shortcut && selectMode==false)
+            else if (command == Q9command.shortcut && selectMode==false)
             {
                 if (currCode.Length == 0)
                 {
-                    setStatusPrefix("速選");
-                    startSelectWord(core.keyInput(1000));
+                    SetStatusPrefix("速選");
+                    StartSelectWord(core.KeyInput(1000));
                 }
                 else if (currCode.Length == 1)
                 {
-                    setStatusPrefix($"速選{Convert.ToInt32(currCode)}");
-                    startSelectWord(core.keyInput(1000+Convert.ToInt32(currCode)));
+                    SetStatusPrefix($"速選{Convert.ToInt32(currCode)}");
+                    StartSelectWord(core.KeyInput(1000+Convert.ToInt32(currCode)));
                 }
                 
             }
-            else if (command == q9command.relate)
+            else if (command == Q9command.relate)
             {
                 if (lastWord.Length==1)
                 {
                     homo = false;
-                    setStatusPrefix($"[{lastWord}]關聯");
-                    startSelectWord(core.getRelate(lastWord));
+                    SetStatusPrefix($"[{lastWord}]關聯");
+                    StartSelectWord(core.GetRelate(lastWord));
                 }
             }
-            else if (command == q9command.prev && selectMode)
+            else if (command == Q9command.prev && selectMode)
             {
-                addPage(-1);
+                AddPage(-1);
             }
-            else if (command == q9command.next && selectMode)
+            else if (command == Q9command.next && selectMode)
             {
-                addPage(1);
+                AddPage(1);
             }
 
 
@@ -870,34 +903,34 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             //prev,next shortcut reset-position 0 related
         }
 
-        private void cancel(bool cleanRelate = true)
+        private void Cancel(bool cleanRelate = true)
         {
-            this.selectMode = false;
+            selectMode = false;
             homo = false;
             openclose = false;
             currCode = "";
 
-            this.currPage = 0;
-            this.selectWords = new string[0];
+            currPage = 0;
+            selectWords = new string[0];
 
-            setStatusPrefix();
-            updateStatus();
+            SetStatusPrefix();
+            UpdateStatus();
 
             if (cleanRelate)
             {
-                this.setButtonImg(0);
+                SetButtonImg(0);
             }
         }
 
-        public void processResult(string[] words)
+        public void ProcessResult(string[] words)
         {
             if (words==null || words.Length==0)
             {
                 //* 
-                cancel();
+                Cancel();
                 return;
             }
-            startSelectWord(words);
+            StartSelectWord(words);
         }
 
         //===================================================================================
@@ -907,23 +940,23 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
         private int currPage = 0;
         private int totalPage = 0;
 
-        public void addPage(int addNum)
+        public void AddPage(int addNum)
         {
             if(currPage + addNum < 0)
             {
-                showPage(totalPage-1);
+                ShowPage(totalPage-1);
             }
             else if (currPage + addNum >=totalPage)
             {
-                showPage(0);
+                ShowPage(0);
             }
             else
             {
-                showPage(currPage + addNum);
+                ShowPage(currPage + addNum);
             }
         }
 
-        public void startSelectWord(string[] words)
+        public void StartSelectWord(string[] words)
         {
             if(words==null || words.Length==0)return;
 
@@ -931,20 +964,20 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             totalPage = (int)Math.Ceiling(words.Length / 9.0);
             selectMode = true;
             currCode = "";
-            showPage(0);
-            setText(10, "取消");
+            ShowPage(0);
+            SetText(10, "取消");
 
             if (totalPage > 1)
             {
-                setText(0, "下頁");
+                SetText(0, "下頁");
             }
             else
             {
-                setText(0, "");
+                SetText(0, "");
             }
         }
 
-        public void showPage(int showPage)
+        public void ShowPage(int showPage)
         {
             currPage = showPage;
             string[] words = new string[10];
@@ -960,12 +993,12 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
                     words[i] = selectWords[p];
                 }
             }
-            setButtonsText(words);
+            SetButtonsText(words);
 
-            updateStatus(totalPage > 1 ? $"{currPage + 1}/{totalPage}頁" : "");
+            UpdateStatus(totalPage > 1 ? $"{currPage + 1}/{totalPage}頁" : "");
         }
 
-        public void selectWord(int inputInt)
+        public void SelectWord(int inputInt)
         {
             int key = currPage * 9 + inputInt - 1;
             if(key>= selectWords.Length)
@@ -976,23 +1009,23 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             if (homo)
             {
                 homo = false;
-                setStatusPrefix($"同音[{typeWord}]");
-                startSelectWord(core.getHomo(typeWord));
+                SetStatusPrefix($"同音[{typeWord}]");
+                StartSelectWord(core.GetHomo(typeWord));
                 return;
             }
             else if (openclose)
             {
                 openclose = false;
-                sendOpenClose(typeWord);
-                cancel();
+                SendOpenClose(typeWord);
+                Cancel();
                 return;
             }
-            sendText(typeWord);
+            SendText(typeWord);
             string[] relates=new string[0];
             if (typeWord.Length == 1 )
             {
                 lastWord = typeWord;
-                relates = core.getRelate(typeWord);
+                relates = core.GetRelate(typeWord);
             }
             else
             {
@@ -1000,12 +1033,12 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
             }
             if (relates!=null && relates.Length > 0)
             {
-                setZeroWords(relates);
-                cancel(false);
+                SetZeroWords(relates);
+                Cancel(false);
             }
             else
             {
-                cancel();
+                Cancel();
             }
 
         }
@@ -1013,19 +1046,19 @@ google查`keycode online`隨便一個結果，都會有查key code的網頁
         //===================================================================================
         private string statusPrefix;
         private string statusText;
-        public void setStatusPrefix(string _prefix = "")
+        public void SetStatusPrefix(string _prefix = "")
         {
             statusPrefix = _prefix;
-            renewStatus();
+            RenewStatus();
         }
-        public void updateStatus(string topText = "")
+        public void UpdateStatus(string topText = "")
         {
             statusText = topText;
-            renewStatus();
+            RenewStatus();
         }
-        public void renewStatus()
+        public void RenewStatus()
         {
-            this.Text = "九万 " + (homo ? "[同音] " : "") + statusPrefix + " " + statusText;
+            Text = "九万 " + (homo ? "[同音] " : "") + statusPrefix + " " + statusText;
         }
     }
 }
